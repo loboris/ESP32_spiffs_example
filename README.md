@@ -10,7 +10,7 @@
 * example of **list** functions
 * example of **file copy** functions
 
-*When using file related functions which has filename argument, prefix* **/spiffs/**  *has to be ddded to the file name.*
+*When using file related functions which has filename argument, prefix* **/spiffs/**  *has to be added to the file name.*
 
 ---
 
