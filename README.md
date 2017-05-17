@@ -4,29 +4,13 @@
 
 #### Features
 
-* full implementation of **spiffs** with VFS
+* full implementation of **spiffs** with **VFS**
 * **directories** are supported
 * file **timestamp** is added to standard spiffs
 * example of **list** functions
 * example of **file copy** functions
 
----
-
-SFPIFFS **image** can be prepared on host and flashed to ESP32. This feature is only tested on Linux.
-
-Place the files to be included on spiffs into **components/spiffs_image/image/** directory
-
-Execute:
-
-`make makefs`
-
-to create spiffs image in build directory without flashing to ESP32
-
-Execute:
-
-`make flashfs`
-
-to create spiffs image in *build* directory and **flash** it to ESP32
+*When using file related functions which has filename argument, prefix* **/spiffs/**  *has to be ddded to the file name.*
 
 ---
 
@@ -40,8 +24,9 @@ Clone the repository
 
 Execute menuconfig and configure your Serial flash config and other settings. Included *sdkconfig.defaults* sets some defaults to be used.
 
-Navigate to **SPIffs Example Configuration** and set SPIFFS options. If you are not familiar with spiffs, leave the default values.
-Select if you want to use wifi (recommended) to get the time from NTP server ans set your WiFi SSID and password.
+Navigate to **SPIffs Example Configuration** and set **SPIFFS** options.
+
+Select if you want to use **wifi** (recommended) to get the time from **NTP** server and set your WiFi SSID and password.
 
 `make menuconfig`
 
@@ -51,9 +36,31 @@ Make and flash the example.
 
 ---
 
+#### Prepare **SPIFFS** image
+
+*It is not required to prepare the image, as the spiffs will be automatically formated on first use, but it might be convenient.*
+
+SFPIFFS **image** can be prepared on host and flashed to ESP32. *This feature is only tested on Linux.*
+
+Copy the files to be included on spiffs into **components/spiffs_image/image/** directory. Subdirectories can also be added.
+
+Execute:
+
+`make makefs`
+
+to create **spiffs image** in build directory **without flashing** to ESP32
+
+Execute:
+
+`make flashfs`
+
+to create **spiffs image** in *build* directory and **flash** it to ESP32
+
+---
+
 #### Example functions
 
-* get the time from NTP server and set the system time (if WiFi is enabled
+* get the time from NTP server and set the system time (if WiFi is enabled)
 * register spiffs as VFS file system; if the fs is not formated (1st start) it will be formated and mounted
 * perform some file system tests
   * write text to file
