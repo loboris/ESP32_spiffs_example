@@ -349,7 +349,7 @@ static void list(char *path, char *match) {
 static int file_copy(const char *to, const char *from)
 {
     int fd_to, fd_from;
-    char buf[4096];
+    char buf[1024];
     ssize_t nread;
     int saved_errno;
 
