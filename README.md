@@ -1,4 +1,4 @@
-### Full example of using **SPIFFS** with ESP3232
+### Full example of using **SPIFFS** with ESP32
 
 ---
 

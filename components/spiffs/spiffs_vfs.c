@@ -724,7 +724,7 @@ int spiffs_mount() {
     int retries = 0;
     int err = 0;
 
-    ESP_LOGI(tag, "Mounting SPIFFS files ystem");
+    ESP_LOGI(tag, "Mounting SPIFFS files system");
 
     cfg.phys_addr 		 = CONFIG_SPIFFS_BASE_ADDR;
     cfg.phys_size 		 = CONFIG_SPIFFS_SIZE;
