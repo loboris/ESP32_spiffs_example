@@ -507,7 +507,7 @@ int actionUnpack(void) {
     }
 
     // read content into s_flashmem
-    fread(&s_flashmem[0], 4, s_flashmem.size()/4, fdsrc);
+    ret = fread(&s_flashmem[0], 4, s_flashmem.size()/4, fdsrc);
 
     // close fiel handle
     fclose(fdsrc);
@@ -528,6 +528,7 @@ int actionUnpack(void) {
 
 
 int actionList() {
+    int ret = 0;
     s_flashmem.resize(s_imageSize, 0xff);
 
     FILE* fdsrc = fopen(s_imageName.c_str(), "rb");
@@ -536,15 +537,18 @@ int actionList() {
         return 1;
     }
 
-    fread(&s_flashmem[0], 4, s_flashmem.size()/4, fdsrc);
+    ret = fread(&s_flashmem[0], 4, s_flashmem.size()/4, fdsrc);
     fclose(fdsrc);
     spiffsMount();
     listFiles();
     spiffsUnmount();
-    return 0;
+    
+    ret = 0;
+    return ret;
 }
 
 int actionVisualize() {
+    int ret = 0;
     s_flashmem.resize(s_imageSize, 0xff);
 
     FILE* fdsrc = fopen(s_imageName.c_str(), "rb");
@@ -553,7 +557,7 @@ int actionVisualize() {
         return 1;
     }
 
-    fread(&s_flashmem[0], 4, s_flashmem.size()/4, fdsrc);
+    ret = fread(&s_flashmem[0], 4, s_flashmem.size()/4, fdsrc);
     fclose(fdsrc);
 
     spiffsMount();
@@ -563,7 +567,8 @@ int actionVisualize() {
     std::cout << "total: " << total <<  std::endl << "used: " << used << std::endl;
     spiffsUnmount();
 
-    return 0;
+    ret = 0;
+    return ret;
 }
 
 void processArgs(int argc, const char** argv) {

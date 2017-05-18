@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stddef.h>
+#include <unistd.h>
 #include <stdint.h>
 #include <ctype.h>
 // ----------- >8 ------------
@@ -43,6 +44,41 @@ typedef unsigned char u8_t;
 // Set spiffs debug output call for system consistency checks.
 #ifndef SPIFFS_CHECK_DBG
 #define SPIFFS_CHECK_DBG(...) //printf(__VA_ARGS__)
+#endif
+
+
+// Defines spiffs debug print formatters
+// some general signed number
+#ifndef _SPIPRIi
+#define _SPIPRIi   "%d"
+#endif
+// address
+#ifndef _SPIPRIad
+#define _SPIPRIad  "%08x"
+#endif
+// block
+#ifndef _SPIPRIbl
+#define _SPIPRIbl  "%04x"
+#endif
+// page
+#ifndef _SPIPRIpg
+#define _SPIPRIpg  "%04x"
+#endif
+// span index
+#ifndef _SPIPRIsp
+#define _SPIPRIsp  "%04x"
+#endif
+// file descriptor
+#ifndef _SPIPRIfd
+#define _SPIPRIfd  "%d"
+#endif
+// file object id
+#ifndef _SPIPRIid
+#define _SPIPRIid  "%04x"
+#endif
+// file flags
+#ifndef _SPIPRIfl
+#define _SPIPRIfl  "%02x"
 #endif
 
 // Enable/disable API functions to determine exact number of bytes
@@ -77,7 +113,7 @@ typedef unsigned char u8_t;
 
 // Define maximum number of gc runs to perform to reach desired free pages.
 #ifndef SPIFFS_GC_MAX_RUNS
-#define SPIFFS_GC_MAX_RUNS              3
+#define SPIFFS_GC_MAX_RUNS              5
 #endif
 
 // Enable/disable statistics on gc. Debug/test purpose only.
