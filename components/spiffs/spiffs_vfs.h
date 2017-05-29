@@ -11,6 +11,9 @@
  *
  */
 
+#define SPIFFS_BASE_PATH "/spiffs"
+
+
 int spiffs_is_registered;
 int spiffs_is_mounted;
 
