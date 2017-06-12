@@ -42,7 +42,7 @@ Make and flash the example.
 
 SFPIFFS **image** can be prepared on host and flashed to ESP32.
 
-**NEW**: Tested and works under **Linux** and **Windows**
+**NEW**: Tested and works under **Linux**, **Windows** and **Mac OS**
 
 Copy the files to be included on spiffs into **components/spiffs_image/image/** directory. Subdirectories can also be added.
 
