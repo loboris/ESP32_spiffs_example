@@ -28,7 +28,6 @@
 #include "esp_log.h"
 #include "spiffs_vfs.h"
 
-
 static const char tag[] = "[SPIFFS example]";
 
 #ifdef CONFIG_EXAMPLE_USE_WIFI
@@ -525,6 +524,174 @@ static void mkdirTest(char *dirname)
     printf("\r\n");
 }
 
+//------------------------------------------------------
+static int writeFile(char *fname, char *mode, char *buf)
+{
+	FILE *fd = fopen(fname, mode);
+    if (fd == NULL) {
+        ESP_LOGE("[write]", "fopen failed");
+    	return -1;
+    }
+    int len = strlen(buf);
+	int res = fwrite(buf, 1, len, fd);
+	if (res != len) {
+        ESP_LOGE("[write]", "fwrite failed: %d <> %d ", res, len);
+        res = fclose(fd);
+        if (res) {
+            ESP_LOGE("[write]", "fclose failed: %d", res);
+            return -2;
+        }
+        return -3;
+    }
+	res = fclose(fd);
+	if (res) {
+        ESP_LOGE("[write]", "fclose failed: %d", res);
+    	return -4;
+	}
+    return 0;
+}
+
+//------------------------------
+static int readFile(char *fname)
+{
+    uint8_t buf[16];
+	FILE *fd = fopen(fname, "rb");
+    if (fd == NULL) {
+        ESP_LOGE("[read]", "fopen failed");
+        return -1;
+    }
+    int res = fread(buf, 1, 8, fd);
+    if (res <= 0) {
+        ESP_LOGE("[read]", "fread failed: %d", res);
+        res = fclose(fd);
+        if (res) {
+            ESP_LOGE("[read]", "fclose failed: %d", res);
+            return -2;
+        }
+        return -3;
+    }
+	res = fclose(fd);
+	if (res) {
+        ESP_LOGE("[read]", "fclose failed: %d", res);
+    	return -4;
+	}
+    return 0;
+}
+
+//================================
+static void File_task_1(void* arg)
+{
+    int res = 0;
+    int n = 0;
+    
+    ESP_LOGI("[TASK_1]", "Started.");
+    res = writeFile("/spiffs/testfil1.txt", "wb", "1");
+    if (res == 0) {
+        while (n < 1000) {
+            n++;
+            res = readFile("/spiffs/testfil1.txt");
+            if (res != 0) {
+                ESP_LOGE("[TASK_1]", "Error reading from file (%d), pass %d", res, n);
+                break;
+            }
+            res = writeFile("/spiffs/testfil1.txt", "a", "1");
+            if (res != 0) {
+                ESP_LOGE("[TASK_1]", "Error writing to file (%d), pass %d", res, n);
+                break;
+            }
+            vTaskDelay(2);
+            if ((n % 100) == 0) {
+                ESP_LOGI("[TASK_1]", "%d reads/writes", n+1);
+            }
+        }
+        if (n == 1000) ESP_LOGI("[TASK_1]", "Finished.");
+    }
+    else {
+        ESP_LOGE("[TASK_1]", "Error creating file (%d)", res);
+    }
+
+    while (1) {
+		vTaskDelay(1000 / portTICK_RATE_MS);
+    }
+}
+
+//================================
+static void File_task_2(void* arg)
+{
+    int res = 0;
+    int n = 0;
+    
+    ESP_LOGI("[TASK_2]", "Started.");
+    res = writeFile("/spiffs/testfil2.txt", "wb", "2");
+    if (res == 0) {
+        while (n < 1000) {
+            n++;
+            res = readFile("/spiffs/testfil2.txt");
+            if (res != 0) {
+                ESP_LOGE("[TASK_2]", "Error reading from file (%d), pass %d", res, n);
+                break;
+            }
+            res = writeFile("/spiffs/testfil2.txt", "a", "2");
+            if (res != 0) {
+                ESP_LOGE("[TASK_2]", "Error writing to file (%d), pass %d", res, n);
+                break;
+            }
+            vTaskDelay(2);
+            if ((n % 100) == 0) {
+                ESP_LOGI("[TASK_2]", "%d reads/writes", n+1);
+            }
+        }
+        if (n == 1000) ESP_LOGI("[TASK_2]", "Finished.");
+    }
+    else {
+        ESP_LOGE("[TASK_2]", "Error creating file (%d)", res);
+    }
+
+    while (1) {
+		vTaskDelay(1000 / portTICK_RATE_MS);
+    }
+}
+
+//================================
+static void File_task_3(void* arg)
+{
+    int res = 0;
+    int n = 0;
+
+    ESP_LOGI("[TASK_3]", "Started.");
+    res = writeFile("/spiffs/testfil3.txt", "wb", "3");
+    if (res == 0) {
+        while (n < 1000) {
+            n++;
+            res = readFile("/spiffs/testfil3.txt");
+            if (res != 0) {
+                ESP_LOGE("[TASK_3]", "Error reading from file (%d), pass %d", res, n);
+                break;
+            }
+            res = writeFile("/spiffs/testfil3.txt", "a", "3");
+            if (res != 0) {
+                ESP_LOGE("[TASK_3]", "Error writing to file (%d), pass %d", res, n);
+                break;
+            }
+            vTaskDelay(2);
+            if ((n % 100) == 0) {
+                ESP_LOGI("[TASK_3]", "%d reads/writes", n+1);
+            }
+        }
+        if (n == 1000) ESP_LOGI("[TASK_3]", "Finished.");
+    }
+    else {
+        ESP_LOGE("[TASK_3]", "Error creating file (%d)", res);
+    }
+
+    vTaskDelay(1000 / portTICK_RATE_MS);
+    printf("\r\n");
+	list("/spiffs/", NULL);
+    while (1) {
+		vTaskDelay(1000 / portTICK_RATE_MS);
+    }
+}
+
 //================
 int app_main(void)
 {
@@ -565,6 +732,18 @@ int app_main(void)
         list("/spiffs/images", NULL);
 	    printf("\r\n");
     }
+
+    ESP_LOGI(tag, "=================================================");
+    ESP_LOGI(tag, "STARTING MULTITASK TEST (3 tasks created)");
+    ESP_LOGI(tag, "Each task will perform 1000 read&write operations");
+    ESP_LOGI(tag, "Expected run time ~3 minutes");
+    ESP_LOGI(tag, "=================================================\r\n");
+
+    xTaskCreatePinnedToCore(File_task_1, "FileTask1", 6*1024, NULL, 5, NULL, 1);
+    vTaskDelay(1000 / portTICK_RATE_MS);
+    xTaskCreatePinnedToCore(File_task_2, "FileTask2", 6*1024, NULL, 5, NULL, 1);
+    vTaskDelay(1000 / portTICK_RATE_MS);
+    xTaskCreatePinnedToCore(File_task_3, "FileTask3", 6*1024, NULL, 5, NULL, 1);
 
     while (1) {
 		vTaskDelay(1000 / portTICK_RATE_MS);
