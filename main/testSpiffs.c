@@ -18,6 +18,7 @@
 #include <sys/time.h>
 #include "lwip/err.h"
 #include "apps/sntp/sntp.h"
+#include "nvs_flash.h"
 
 #endif
 
@@ -697,6 +698,13 @@ int app_main(void)
 {
     
 #ifdef CONFIG_EXAMPLE_USE_WIFI
+    ESP_ERROR_CHECK( nvs_flash_init() );
+
+    // ===== Set time zone ======
+	setenv("TZ", "CET-1CEST", 0);
+	tzset();
+	// ==========================
+
     time_t now;
     struct tm timeinfo;
     time(&now);
