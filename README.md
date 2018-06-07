@@ -59,8 +59,8 @@ Make and flash the example.
 
 Before the image can be prepared, the **mkspiffs** executable must be created.<br>
 The **sdkconfig.h** is used in build process!<br>
-Before building, **copy** the **sdkconfig.h** from **build/include** directory to **components/mkspiffs/include**
-Change the working directory to **components/mkspiffs/include**
+Before building, **copy** the **sdkconfig.h** from **build/include** directory to **components/mkspiffs/include**.<br>
+Change the working directory to **components/mkspiffs/include**.<br>
 Execute:
 
 ```
