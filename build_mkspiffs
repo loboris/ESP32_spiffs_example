@@ -1,0 +1,14 @@
+#!/bin/bash
+
+# ##########################################################
+# To build 'mkspiffs' run with no espressif tools path set !
+# ##########################################################
+
+if [ ! -f build/include/sdkconfig.h ]; then
+    echo "'sdkconfig.h' not found, build your firmware first"
+    exit 1
+fi
+
+grep "CONFIG_SPIFFS_"  build/include/sdkconfig.h  > components/mkspiffs/include/sdkconfig.h
+make -C components/mkspiffs clean
+make -C components/mkspiffs

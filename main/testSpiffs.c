@@ -5,33 +5,28 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include <string.h>
+#include <sys/time.h>
+#include <errno.h>
+#include <sys/fcntl.h>
+#include <unistd.h>
+#include <ctype.h>
+
+#include "esp_vfs.h"
+#include "esp_log.h"
+#include "esp_spiffs.h"
+
+static const char tag[] = "[SPIFFS example]";
 
 #ifdef CONFIG_EXAMPLE_USE_WIFI
-
 #include "esp_wifi.h"
 #include "esp_system.h"
 #include "esp_event.h"
 #include "esp_event_loop.h"
 #include "freertos/event_groups.h"
 #include "esp_attr.h"
-#include <time.h>
-#include <sys/time.h>
 #include "lwip/err.h"
 #include "apps/sntp/sntp.h"
 #include "nvs_flash.h"
-
-#endif
-
-#include <errno.h>
-#include <sys/fcntl.h>
-#include "esp_vfs.h"
-#include "esp_vfs_fat.h"
-#include "esp_log.h"
-#include "spiffs_vfs.h"
-
-static const char tag[] = "[SPIFFS example]";
-
-#ifdef CONFIG_EXAMPLE_USE_WIFI
 
 /* FreeRTOS event group to signal when we are connected & ready to make a request */
 static EventGroupHandle_t wifi_event_group;
@@ -109,7 +104,7 @@ static void obtain_time(void)
     const int retry_count = 10;
     while(timeinfo.tm_year < (2016 - 1900) && ++retry < retry_count) {
         ESP_LOGI(tag, "Waiting for system time to be set... (%d/%d)", retry, retry_count);
-        vTaskDelay(2000 / portTICK_PERIOD_MS);
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
         time(&now);
         localtime_r(&now, &timeinfo);
     }
@@ -123,21 +118,20 @@ static void obtain_time(void)
     ESP_ERROR_CHECK( esp_wifi_stop() );
 }
 
-#endif
+#endif // CONFIG_EXAMPLE_USE_WIFI
 
 
 // ============================================================================
-#include <ctype.h>
 
 // fnmatch defines
-#define	FNM_NOMATCH	1	// Match failed.
+#define	FNM_NOMATCH     1       // Match failed.
 #define	FNM_NOESCAPE	0x01	// Disable backslash escaping.
 #define	FNM_PATHNAME	0x02	// Slash must be matched by slash.
 #define	FNM_PERIOD		0x04	// Period must be matched by period.
 #define	FNM_LEADING_DIR	0x08	// Ignore /<tail> after Imatch.
 #define	FNM_CASEFOLD	0x10	// Case insensitive search.
 #define FNM_PREFIX_DIRS	0x20	// Directory prefixes of pattern match too.
-#define	EOS	        '\0'
+#define	EOS	            '\0'
 
 //-----------------------------------------------------------------------
 static const char * rangematch(const char *pattern, char test, int flags)
@@ -273,75 +267,77 @@ static void list(char *path, char *match) {
     char *lpath = NULL;
     int statok;
 
-    printf("LIST of DIR [%s]\r\n", path);
+    printf("\nList of Directory [%s]\n", path);
+    printf("-----------------------------------\n");
     // Open directory
     dir = opendir(path);
     if (!dir) {
-        printf("Error opening directory\r\n");
+        printf("Error opening directory\n");
         return;
     }
 
     // Read directory entries
     uint64_t total = 0;
     int nfiles = 0;
-    printf("T  Size      Date/Time         Name\r\n");
-    printf("-----------------------------------\r\n");
+    printf("T  Size      Date/Time         Name\n");
+    printf("-----------------------------------\n");
     while ((ent = readdir(dir)) != NULL) {
-    	sprintf(tpath, path);
+        sprintf(tpath, path);
         if (path[strlen(path)-1] != '/') strcat(tpath,"/");
         strcat(tpath,ent->d_name);
         tbuffer[0] = '\0';
 
         if ((match == NULL) || (fnmatch(match, tpath, (FNM_PERIOD)) == 0)) {
-			// Get file stat
-			statok = stat(tpath, &sb);
+            // Get file stat
+            statok = stat(tpath, &sb);
 
-			if (statok == 0) {
-				tm_info = localtime(&sb.st_mtime);
-				strftime(tbuffer, 80, "%d/%m/%Y %R", tm_info);
-			}
-			else sprintf(tbuffer, "                ");
+            if (statok == 0) {
+                tm_info = localtime(&sb.st_mtime);
+                strftime(tbuffer, 80, "%d/%m/%Y %R", tm_info);
+            }
+            else sprintf(tbuffer, "                ");
 
-			if (ent->d_type == DT_REG) {
-				type = 'f';
-				nfiles++;
-				if (statok) strcpy(size, "       ?");
-				else {
-					total += sb.st_size;
-					if (sb.st_size < (1024*1024)) sprintf(size,"%8d", (int)sb.st_size);
-					else if ((sb.st_size/1024) < (1024*1024)) sprintf(size,"%6dKB", (int)(sb.st_size / 1024));
-					else sprintf(size,"%6dMB", (int)(sb.st_size / (1024 * 1024)));
-				}
-			}
-			else {
-				type = 'd';
-				strcpy(size, "       -");
-			}
+            if (ent->d_type == DT_REG) {
+                type = 'f';
+                nfiles++;
+                if (statok) strcpy(size, "       ?");
+                else {
+                    total += sb.st_size;
+                    if (sb.st_size < (1024*1024)) sprintf(size,"%8d", (int)sb.st_size);
+                    else if ((sb.st_size/1024) < (1024*1024)) sprintf(size,"%6dKB", (int)(sb.st_size / 1024));
+                    else sprintf(size,"%6dMB", (int)(sb.st_size / (1024 * 1024)));
+                }
+            }
+            else {
+                type = 'd';
+                strcpy(size, "       -");
+            }
 
-			printf("%c  %s  %s  %s\r\n",
-				type,
-				size,
-				tbuffer,
-				ent->d_name
-			);
+            printf("%c  %s  %s  %s\r\n",
+                type,
+                size,
+                tbuffer,
+                ent->d_name
+            );
         }
     }
     if (total) {
-        printf("-----------------------------------\r\n");
+        printf("-----------------------------------\n");
     	if (total < (1024*1024)) printf("   %8d", (int)total);
     	else if ((total/1024) < (1024*1024)) printf("   %6dKB", (int)(total / 1024));
     	else printf("   %6dMB", (int)(total / (1024 * 1024)));
-    	printf(" in %d file(s)\r\n", nfiles);
+    	printf(" in %d file(s)\n", nfiles);
     }
-    printf("-----------------------------------\r\n");
+    printf("-----------------------------------\n");
 
     closedir(dir);
 
     free(lpath);
 
-	uint32_t tot, used;
-	spiffs_fs_stat(&tot, &used);
-	printf("SPIFFS: free %d KB of %d KB\r\n", (tot-used) / 1024, tot / 1024);
+	uint32_t tot=0, used=0;
+    esp_spiffs_info(NULL, &tot, &used);
+    printf("SPIFFS: free %d KB of %d KB\n", (tot-used) / 1024, tot / 1024);
+    printf("-----------------------------------\n\n");
 }
 
 //----------------------------------------------------
@@ -399,130 +395,146 @@ static int file_copy(const char *to, const char *from)
 //--------------------------------
 static void writeTest(char *fname)
 {
-	printf("==== Write to file \"%s\" ====\r\n", fname);
+    printf("=======================\n");
+    printf("==== Write to file ====\n");
+    printf("=======================\n");
+    printf("  file: \"%s\"\n", fname);
 
-	int n, res, tot, len;
-	char buf[40];
+    int n, res, tot, len;
+    char buf[40];
 
-	FILE *fd = fopen(fname, "wb");
+    FILE *fd = fopen(fname, "wb");
     if (fd == NULL) {
-    	printf("     Error opening file\r\n");
-    	return;
+        printf("  Error opening file (%d) %s\n", errno, strerror(errno));
+        printf("\n");
+        return;
     }
     tot = 0;
     for (n = 1; n < 11; n++) {
-    	sprintf(buf, "ESP32 spiffs write to file, line %d\r\n", n);
-    	len = strlen(buf);
-		res = fwrite(buf, 1, len, fd);
-		if (res != len) {
-	    	printf("     Error writing to file(%d <> %d\r\n", res, len);
-	    	break;
-		}
-		tot += res;
+        sprintf(buf, "ESP32 spiffs write to file, line %d\n", n);
+        len = strlen(buf);
+        res = fwrite(buf, 1, len, fd);
+        if (res != len) {
+            printf("  Error writing to file(%d <> %d\n", res, len);
+            break;
+        }
+        tot += res;
     }
-	printf("     %d bytes written\r\n", tot);
-	res = fclose(fd);
-	if (res) {
-    	printf("     Error closing file\r\n");
-	}
-    printf("\r\n");
+    printf("  %d bytes written\n", tot);
+    res = fclose(fd);
+    if (res) {
+        printf("     Error closing file\r\n");
+    }
+    printf("\n");
 }
 
 //-------------------------------
 static void readTest(char *fname)
 {
-	printf("==== Reading from file \"%s\" ====\r\n", fname);
+    printf("  file: \"%s\"\n", fname);
 
-	int res;
-	char *buf;
-	buf = calloc(1024, 1);
-	if (buf == NULL) {
-    	printf("     Error allocating read buffer\"\r\n");
-    	return;
-	}
+    int res;
+    char *buf;
+    buf = calloc(1024, 1);
+    if (buf == NULL) {
+        printf("  Error allocating read buffer\n");
+        printf("\n");
+        return;
+    }
 
-	FILE *fd = fopen(fname, "rb");
+    FILE *fd = fopen(fname, "rb");
     if (fd == NULL) {
-    	printf("     Error opening file\r\n");
-    	free(buf);
-    	return;
+        printf("  Error opening file (%d) %s\n", errno, strerror(errno));
+        free(buf);
+        printf("\n");
+        return;
     }
     res = 999;
     res = fread(buf, 1, 1023, fd);
     if (res <= 0) {
-    	printf("     Error reading from file\r\n");
+        printf("  Error reading from file\n");
     }
     else {
-    	printf("     %d bytes read [\r\n", res);
+        printf("  %d bytes read [\n", res);
         buf[res] = '\0';
-        printf("%s\r\n]\r\n", buf);
+        printf("%s\n]\n", buf);
     }
-	free(buf);
+    free(buf);
 
-	res = fclose(fd);
-	if (res) {
-    	printf("     Error closing file\r\n");
-	}
-    printf("\r\n");
+    res = fclose(fd);
+    if (res) {
+        printf("  Error closing file\n");
+    }
+    printf("\n");
 }
 
 //----------------------------------
 static void mkdirTest(char *dirname)
 {
-	printf("==== Make new directory \"%s\" ====\r\n", dirname);
+    printf("============================\n");
+    printf("==== Make new directory ====\n");
+    printf("============================\n");
+    printf("  dir: \"%s\"\n", dirname);
 
-	int res;
-	struct stat st = {0};
-	char nname[80];
+    int res;
+    struct stat st = {0};
+    char nname[80];
 
-	if (stat(dirname, &st) == -1) {
-	    res = mkdir(dirname, 0777);
-	    if (res != 0) {
-	    	printf("     Error creating directory (%d)\r\n", res);
-	        printf("\r\n");
-	        return;
-	    }
-    	printf("     Directory created\r\n\r\n");
-		list("/spiffs/", NULL);
-		vTaskDelay(1000 / portTICK_RATE_MS);
+    if (stat(dirname, &st) == -1) {
+        res = mkdir(dirname, 0777);
+        if (res != 0) {
+            printf("  Error creating directory (%d) %s\n", errno, strerror(errno));
+            printf("\n");
+            return;
+        }
+        printf("  Directory created\n");
 
-    	printf("     Copy file from root to new directory...\r\n");
-    	sprintf(nname, "%s/test.txt.copy", dirname);
-    	res = file_copy(nname, "/spiffs/test.txt");
-	    if (res != 0) {
-	    	printf("     Error copying file (%d)\r\n", res);
-	    }
-    	printf("\r\n");
-    	list(dirname, NULL);
-		vTaskDelay(1000 / portTICK_RATE_MS);
+        printf("  Copy file from root to new directory...\n");
+        sprintf(nname, "%s/test.txt.copy", dirname);
+        res = file_copy(nname, "/spiffs/test.txt");
+        if (res != 0) {
+            printf("  Error copying file (%d)\n", res);
+        }
+ 
+        printf("  List the new directory\n");
+        list(dirname, NULL);
+        vTaskDelay(500 / portTICK_RATE_MS);
 
-    	printf("     Removing file from new directory...\r\n");
-	    res = remove(nname);
-	    if (res != 0) {
-	    	printf("     Error removing directory (%d)\r\n", res);
-	    }
-    	printf("\r\n");
-    	list(dirname, NULL);
-		vTaskDelay(1000 / portTICK_RATE_MS);
+        printf("  List root directory, the \"newdir\" should be listed\n");
+        list("/spiffs/", NULL);
+        vTaskDelay(1000 / portTICK_RATE_MS);
 
-    	printf("     Removing directory...\r\n");
-	    res = remove(dirname);
-	    if (res != 0) {
-	    	printf("     Error removing directory (%d)\r\n", res);
-	    }
-    	printf("\r\n");
-		list("/spiffs/", NULL);
-		vTaskDelay(1000 / portTICK_RATE_MS);
-	}
-	else {
-		printf("     Directory already exists, removing\r\n");
-	    res = remove(dirname);
-	    if (res != 0) {
-	    	printf("     Error removing directory (%d)\r\n", res);
-	    }
-	}
+        printf("  Try to remove non empty directory...\n");
+        res = rmdir(dirname);
+        if (res != 0) {
+            printf("  Error removing directory (%d) %s\n", errno, strerror(errno));
+        }
 
-    printf("\r\n");
+        printf("  Removing file from new directory...\n");
+        res = remove(nname);
+        if (res != 0) {
+            printf("  Error removing file (%d) %s\n", errno, strerror(errno));
+        }
+
+        printf("  Removing directory...\n");
+        res = rmdir(dirname);
+        if (res != 0) {
+            printf("  Error removing directory (%d) %s\n", errno, strerror(errno));
+        }
+
+        printf("  List root directory, the \"newdir\" should be gone\n");
+        list("/spiffs/", NULL);
+        vTaskDelay(1000 / portTICK_RATE_MS);
+    }
+    else {
+        printf("  Directory already exists, removing\n");
+        res = rmdir(dirname);
+        if (res != 0) {
+            printf("  Error removing directory (%d) %s\n", errno, strerror(errno));
+        }
+    }
+
+    printf("\n");
 }
 
 //------------------------------------------------------
@@ -579,33 +591,38 @@ static int readFile(char *fname)
     return 0;
 }
 
+#define TEST_FILE_NUM    (1000)
+static int test_finished = 0;
+
 //================================
 static void File_task_1(void* arg)
 {
     int res = 0;
     int n = 0;
-    
+
     ESP_LOGI("[TASK_1]", "Started.");
-    res = writeFile("/spiffs/testfil1.txt", "wb", "1");
+    res = writeFile("/spiffs/testfil1.txt", "wb", "3");
     if (res == 0) {
-        while (n < 1000) {
+        while (n < TEST_FILE_NUM) {
             n++;
             res = readFile("/spiffs/testfil1.txt");
             if (res != 0) {
                 ESP_LOGE("[TASK_1]", "Error reading from file (%d), pass %d", res, n);
                 break;
             }
-            res = writeFile("/spiffs/testfil1.txt", "a", "1");
+            res = writeFile("/spiffs/testfil1.txt", "a", "3");
             if (res != 0) {
                 ESP_LOGE("[TASK_1]", "Error writing to file (%d), pass %d", res, n);
                 break;
             }
             vTaskDelay(2);
             if ((n % 100) == 0) {
-                ESP_LOGI("[TASK_1]", "%d reads/writes", n+1);
+                ESP_LOGI("[TASK_1]", "%d reads/writes", n);
             }
         }
-        if (n == 1000) ESP_LOGI("[TASK_1]", "Finished.");
+        if (n == TEST_FILE_NUM) {
+            ESP_LOGI("[TASK_1]", "Finished");
+        }
     }
     else {
         ESP_LOGE("[TASK_1]", "Error creating file (%d)", res);
@@ -621,28 +638,30 @@ static void File_task_2(void* arg)
 {
     int res = 0;
     int n = 0;
-    
+
     ESP_LOGI("[TASK_2]", "Started.");
-    res = writeFile("/spiffs/testfil2.txt", "wb", "2");
+    res = writeFile("/spiffs/testfil2.txt", "wb", "3");
     if (res == 0) {
-        while (n < 1000) {
+        while (n < TEST_FILE_NUM) {
             n++;
             res = readFile("/spiffs/testfil2.txt");
             if (res != 0) {
                 ESP_LOGE("[TASK_2]", "Error reading from file (%d), pass %d", res, n);
                 break;
             }
-            res = writeFile("/spiffs/testfil2.txt", "a", "2");
+            res = writeFile("/spiffs/testfil2.txt", "a", "3");
             if (res != 0) {
                 ESP_LOGE("[TASK_2]", "Error writing to file (%d), pass %d", res, n);
                 break;
             }
             vTaskDelay(2);
             if ((n % 100) == 0) {
-                ESP_LOGI("[TASK_2]", "%d reads/writes", n+1);
+                ESP_LOGI("[TASK_2]", "%d reads/writes", n);
             }
         }
-        if (n == 1000) ESP_LOGI("[TASK_2]", "Finished.");
+        if (n == TEST_FILE_NUM) {
+            ESP_LOGI("[TASK_2]", "Finished");
+        }
     }
     else {
         ESP_LOGE("[TASK_2]", "Error creating file (%d)", res);
@@ -656,40 +675,75 @@ static void File_task_2(void* arg)
 //================================
 static void File_task_3(void* arg)
 {
+    char tag[16] = {'\0'};
+    int is_task = 1;
+    if (arg) {
+        is_task = 0;
+        sprintf(tag, "Test");
+    }
+    else sprintf(tag, "[TASK_3]");
     int res = 0;
-    int n = 0;
+    uint32_t n = 0, min_w = 999999, max_w = 0, min_r = 999999, max_r = 0;
+    uint64_t tstart, tend, trun, t_start;
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    t_start = tv.tv_sec*1000000L + tv.tv_usec;
 
-    ESP_LOGI("[TASK_3]", "Started.");
+    ESP_LOGI(tag, "Started.");
     res = writeFile("/spiffs/testfil3.txt", "wb", "3");
     if (res == 0) {
-        while (n < 1000) {
+        while (n < TEST_FILE_NUM) {
             n++;
+            gettimeofday(&tv, NULL);
+            tstart = tv.tv_sec*1000000L + tv.tv_usec;
             res = readFile("/spiffs/testfil3.txt");
+            gettimeofday(&tv, NULL);
+            tend = (tv.tv_sec*1000000L + tv.tv_usec) - tstart;
+            if (tend < min_r) min_r = tend;
+            if (tend > max_r) max_r = tend;
             if (res != 0) {
-                ESP_LOGE("[TASK_3]", "Error reading from file (%d), pass %d", res, n);
+                ESP_LOGE(tag, "Error reading from file (%d), pass %d", res, n);
                 break;
             }
+            gettimeofday(&tv, NULL);
+            tstart = tv.tv_sec*1000000L + tv.tv_usec;
             res = writeFile("/spiffs/testfil3.txt", "a", "3");
+            gettimeofday(&tv, NULL);
+            tend = (tv.tv_sec*1000000L + tv.tv_usec) - tstart;
+            if (tend < min_w) min_w = tend;
+            if (tend > max_w) max_w = tend;
             if (res != 0) {
-                ESP_LOGE("[TASK_3]", "Error writing to file (%d), pass %d", res, n);
+                ESP_LOGE(tag, "Error writing to file (%d), pass %d", res, n);
                 break;
             }
             vTaskDelay(2);
             if ((n % 100) == 0) {
-                ESP_LOGI("[TASK_3]", "%d reads/writes", n+1);
+                ESP_LOGI(tag, "%d reads/writes", n);
             }
         }
-        if (n == 1000) ESP_LOGI("[TASK_3]", "Finished.");
+        if (n == TEST_FILE_NUM) {
+            gettimeofday(&tv, NULL);
+            trun = (tv.tv_sec*1000000L + tv.tv_usec) - t_start;
+            ESP_LOGW(tag, "Min write time: %u us", min_w);
+            ESP_LOGW(tag, "Max write time: %u us", max_w);
+            ESP_LOGW(tag, "Min read  time: %u us", min_r);
+            ESP_LOGW(tag, "Max read  time: %u us", max_r);
+            ESP_LOGW(tag, "Total run time: %llu ms", trun / 1000);
+            ESP_LOGI(tag, "Finished");
+        }
     }
     else {
-        ESP_LOGE("[TASK_3]", "Error creating file (%d)", res);
+        ESP_LOGE(tag, "Error creating file (%d)", res);
     }
 
     vTaskDelay(1000 / portTICK_RATE_MS);
     printf("\r\n");
 	list("/spiffs/", NULL);
-    while (1) {
-		vTaskDelay(1000 / portTICK_RATE_MS);
+    test_finished = 1;
+    if (is_task) {
+        while (1) {
+        	vTaskDelay(1000 / portTICK_RATE_MS);
+        }
     }
 }
 
@@ -719,43 +773,105 @@ int app_main(void)
 #endif
 
     printf("\r\n\n");
-    ESP_LOGI(tag, "==== STARTING SPIFFS TEST ====\r\n");
+    ESP_LOGI(tag, "==== STARTING SPIFFS TEST ====\n");
 
-    vfs_spiffs_register();
-    printf("\r\n\n");
+    esp_vfs_spiffs_conf_t conf = {
+      .base_path = "/spiffs",
+      .partition_label = NULL,
+      .max_files = 5,
+      .format_if_mount_failed = true
+    };
+    
+    // Use settings defined above to initialize and mount SPIFFS filesystem.
+    // Note: esp_vfs_spiffs_register is an all-in-one convenience function.
+    esp_err_t ret = esp_vfs_spiffs_register(&conf);
 
-   	if (spiffs_is_mounted) {
-		vTaskDelay(2000 / portTICK_RATE_MS);
-
-		writeTest("/spiffs/test.txt");
-		readTest("/spiffs/test.txt");
-		readTest("/spiffs/spiffs.info");
-
-		list("/spiffs/", NULL);
-	    printf("\r\n");
-
-		mkdirTest("/spiffs/newdir");
-
-		printf("==== List content of the directory \"images\" ====\r\n\r\n");
-        list("/spiffs/images", NULL);
-	    printf("\r\n");
+    if (ret != ESP_OK) {
+        if (ret == ESP_FAIL) {
+            ESP_LOGE(tag, "Failed to mount or format filesystem");
+        } else if (ret == ESP_ERR_NOT_FOUND) {
+            ESP_LOGE(tag, "Failed to find SPIFFS partition");
+        } else {
+            ESP_LOGE(tag, "Failed to initialize SPIFFS (%d)", ret);
+        }
+        return 0;
     }
 
-    ESP_LOGI(tag, "=================================================");
-    ESP_LOGI(tag, "STARTING MULTITASK TEST (3 tasks created)");
-    ESP_LOGI(tag, "Each task will perform 1000 read&write operations");
-    ESP_LOGI(tag, "Expected run time ~3 minutes");
-    ESP_LOGI(tag, "=================================================\r\n");
+    vTaskDelay(1000 / portTICK_RATE_MS);
 
+    // Remove test files
+    remove("/spiffs/testfil1.txt");
+    remove("/spiffs/testfil2.txt");
+    remove("/spiffs/testfil3.txt");
+
+    writeTest("/spiffs/test.txt");
+
+    printf("========================\n");
+    printf("==== Read from file ====\n");
+    printf("========================\n");
+    readTest("/spiffs/test.txt");
+
+    printf("=================================================\n");
+    printf("==== Read from file included in sfiffs image ====\n");
+    printf("=================================================\n");
+    readTest("/spiffs/spiffs.info");
+
+    printf("=============================\n");
+    printf("==== List root directory ====\n");
+    printf("=============================\n");
+    list("/spiffs/", NULL);
+
+    mkdirTest("/spiffs/newdir");
+
+    printf("================================================\n");
+    printf("==== List content of the directory \"images\" ====\n");
+    printf("==== which is included on spiffs image      ====\n");
+    printf("================================================\n");
+    list("/spiffs/images", NULL);
+    
+    printf("==============================================================\n");
+    printf("==== Get the timings of spiffs operations\n");
+    printf("==== Operation:\n");
+    printf("====   Open file for writting, append 1 byte, close file\n");
+    printf("====   Open file for readinging, read 8 bytes, close file\n");
+    printf("==== 2 ms sleep between operations\n");
+    printf("==== %4d operations will be executed\n", TEST_FILE_NUM);
+    printf("==============================================================\n");
+    int dummy = 0;
+    vTaskDelay(500 / portTICK_RATE_MS);
+    File_task_3(&dummy);
+    vTaskDelay(500 / portTICK_RATE_MS);
+
+#ifdef CONFIG_EXAMPLE_RUN_MULTITASK_TEST
+    printf("\n====================================================\n");
+    printf("STARTING MULTITASK TEST (3 tasks created)\n");
+    printf("Operation:\n");
+    printf("  Open file for writting, append 1 byte, close file\n");
+    printf("  Open file for readinging, read 8 bytes, close file\n");
+    printf("2 ms sleep between operations\n");
+    printf("Each task will perform %4d operations\n", TEST_FILE_NUM);
+    printf("Expected run time 40~100 seconds\n");
+    printf("====================================================\r\n");
+
+    test_finished = 0;
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    uint32_t start_test_time = tv.tv_sec;
     xTaskCreatePinnedToCore(File_task_1, "FileTask1", 6*1024, NULL, 5, NULL, 1);
-    vTaskDelay(1000 / portTICK_RATE_MS);
+    vTaskDelay(200 / portTICK_RATE_MS);
     xTaskCreatePinnedToCore(File_task_2, "FileTask2", 6*1024, NULL, 5, NULL, 1);
-    vTaskDelay(1000 / portTICK_RATE_MS);
+    vTaskDelay(200 / portTICK_RATE_MS);
     xTaskCreatePinnedToCore(File_task_3, "FileTask3", 6*1024, NULL, 5, NULL, 1);
-
-    while (1) {
-		vTaskDelay(1000 / portTICK_RATE_MS);
+    while (!test_finished) {
+		vTaskDelay(500 / portTICK_RATE_MS);
     }
+    gettimeofday(&tv, NULL);
+    start_test_time = tv.tv_sec - start_test_time;
+	vTaskDelay(500 / portTICK_RATE_MS);
+    printf("\nTotal multitask test run time: %u seconds\n", start_test_time);
+#endif
+    printf("\n");
+    ESP_LOGI(tag, "==== SPIFFS TEST FINISHED ====\n");
     return 0;
 }
 
